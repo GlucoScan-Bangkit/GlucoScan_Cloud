@@ -8,17 +8,7 @@ const router = require('./routers/routers');
 
 dotenv.config();
 
-const app = express();
-app.use(bodyParser.json());
-
-// Konfigurasi session
-app.use(session({
-    secret: process.env.SECRET_KEY,
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false } // Set ke true jika menggunakan HTTPS
-}));
-
+// Pastikan Firebase diinisialisasi sebelum digunakan
 if (!process.env.FIREBASE_PROJECT_ID || 
     !process.env.FIREBASE_PRIVATE_KEY || 
     !process.env.FIREBASE_CLIENT_EMAIL || 
@@ -36,10 +26,23 @@ admin.initializeApp({
     }),
 });
 
+const db = admin.firestore(); // Sekarang bisa mengakses Firestore setelah inisialisasi
+
+const app = express();
+app.use(bodyParser.json());
+
+// Konfigurasi session
+app.use(session({
+    secret: process.env.SECRET_KEY,
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false } // Set ke true jika menggunakan HTTPS
+}));
+
 // Middleware periksa session
 app.use((req, res, next) => {
     if (req.session.user && req.path === '/login') {
-        return res.redirect('/');
+        return res.redirect('/'); // Redirect jika sudah login
     }
     next();
 });
