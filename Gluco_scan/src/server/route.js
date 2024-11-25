@@ -21,5 +21,9 @@ const router = express.Router();
 router.post('/register', handler.register);
 router.post('/login', handler.login);
 router.post('/logout', handler.logout);
+router.get('/dashboard', handler.dashboard);
+router.patch('/dashboard/ChangePassword', handler.ChangePassword);
+router.patch('/dashboard/gantiData', handler.changeData);
+
 
 module.exports = router;
