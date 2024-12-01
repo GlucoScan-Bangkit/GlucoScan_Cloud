@@ -5,6 +5,7 @@ const serviceAccount = require(process.env.CONFIG);
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
+    storageBucket: `${process.env.BUCKET_NAME}`,
 });
 
 module.exports = admin;

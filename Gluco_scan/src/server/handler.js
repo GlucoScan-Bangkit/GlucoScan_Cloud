@@ -1,6 +1,10 @@
 const admin = require('../services/dataStore');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
+const path = require('path');
+const { Storage } = require('@google-cloud/storage');
 
 require('dotenv').config();
 
@@ -18,6 +22,9 @@ const register = async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Default profile picture URL
+        const defaultProfilePicture = process.env.DEFAULT_USER_PROFILE;
+
         // Create user in Firebase Authentication
         const userRecord = await admin.auth().createUser({
             email,
@@ -32,11 +39,12 @@ const register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
+            profilePicture: defaultProfilePicture, // Add profile picture URL
         });
 
         res.status(201).json({
             message: 'Registrasi berhasil',
-            user: { id: userId, name, email },
+            user: { id: userId, name, email, profilePicture: defaultProfilePicture },
         });
     } catch (error) {
         res.status(500).json({ message: `Error: ${error.message}` });
@@ -119,6 +127,7 @@ const dashboard = async (req, res) => {
             user: {
                 name: userData.name,
                 email: userData.email,
+                profilePicture: userData.profilePicture,
             },
         });
     } catch (error) {
@@ -213,6 +222,63 @@ const changeData = async (req, res) => {
     }
 };
 
+const bucket = admin.storage().bucket();
+
+// Konfigurasi multer untuk menangani file upload
+const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!allowedTypes.includes(file.mimetype)) {
+            return cb(new Error('Hanya file gambar (JPEG, PNG) yang diperbolehkan'));
+        }
+        cb(null, true);
+    },
+});
+
+// Function ganti foto profil
+const changeProfilePicture = async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ message: 'Anda harus login terlebih dahulu' });
+    }
+
+    const userId = req.session.user.id;
+
+    if (!req.file) {
+        return res.status(400).json({ message: 'Gambar tidak ditemukan, harap unggah file gambar' });
+    }
+
+    try {
+        const file = req.file;
+        const extension = path.extname(file.originalname);
+        const newFileName = `userProfile/${uuidv4()}${extension}`; 
+        const fileUpload = bucket.file(newFileName);
+
+        // Upload file ke Cloud Storage
+        await fileUpload.save(file.buffer, {
+            contentType: file.mimetype,
+            public: true, // akses publik
+        });
+
+        // URL publik gambar
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${newFileName}`;
+
+        // Perbarui URL gambar di Firestore
+        await admin.firestore().collection('User').doc(userId).update({
+            profilePicture: publicUrl,
+        });
+
+        // Perbarui sesi user
+        req.session.user.profilePicture = publicUrl;
+
+        res.status(200).json({
+            message: 'Foto profil berhasil diubah',
+            profilePicture: publicUrl,
+        });
+    } catch (error) {
+        res.status(500).json({ message: `Error: ${error.message}` });
+    }
+};
 
 
-module.exports = { register, login, logout, dashboard, ChangePassword, changeData };
+module.exports = { register, login, logout, dashboard, ChangePassword, changeData, changeProfilePicture, upload};
