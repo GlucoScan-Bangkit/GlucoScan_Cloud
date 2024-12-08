@@ -12,16 +12,6 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-//test session
-app.use(
-    session({
-        secret: process.env.SECRET_KEY,
-        resave: false,
-        saveUninitialized: true,
-        cookie: { maxAge: 60000 }, // 1 menit
-    })
-);
-
 // Routes
 app.use('/', route);
 

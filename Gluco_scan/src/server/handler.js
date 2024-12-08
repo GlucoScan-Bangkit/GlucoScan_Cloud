@@ -39,7 +39,11 @@ const register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
+            no_hp:'',
+            age:'',
+            gender:'',
             profilePicture: defaultProfilePicture, // Add profile picture URL
+            token:'',
         });
 
         res.status(201).json({
@@ -74,15 +78,17 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Email atau password salah' });
         }
 
-        // Generate JWT token for user
+        // Generate JWT token
         const token = jwt.sign({ id: userData.id, email: userData.email }, JWT_SECRET, {
             expiresIn: '365d',
         });
 
-        req.session.user = { id: userData.id, name: userData.name, email: userData.email };
+        // Update token di Firestore
+        await admin.firestore().collection('User').doc(user.uid).update({ token });
+
         res.status(200).json({
             message: 'Login berhasil',
-            user: { email: userData.email, token },
+            user: { id: userData.id, email: userData.email, token },
         });
     } catch (error) {
         res.status(500).json({ message: `Error: ${error.message}` });
@@ -90,31 +96,52 @@ const login = async (req, res) => {
 };
 
 // Logout
-const logout = (req, res) => {
-    //No user login
-    if (!req.session.user) {
-        return res.status(400).json({ message: 'Tidak ada user yang login' });
+const logout = async (req, res) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({ message: 'Authorization header tidak ditemukan' });
     }
 
-    // Destroy Session
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ message: 'Gagal melakukan logout' });
+    const token = authHeader.split(' ')[1]; // Format: "Bearer <token>"
+
+    try {
+        // Verifikasi token JWT
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const userId = decoded.id;
+
+        const userDocRef = admin.firestore().collection('User').doc(userId);
+        const userDoc = await userDocRef.get();
+
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: 'Pengguna tidak ditemukan' });
         }
+
+        const userData = userDoc.data();
+
+        // Periksa apakah token sama dengan yang di firestore
+        if (userData.token !== token) {
+            return res.status(401).json({ message: 'Token tidak valid atau sudah logout' });
+        }
+
+        // Hapus token dari Firestore
+        await userDocRef.update({ token: '' });
+
         res.status(200).json({ message: 'Logout berhasil' });
-    });
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ message: 'Token tidak valid' });
+        }
+
+        res.status(500).json({ message: `Error: ${error.message}` });
+    }
 };
 
 // Dashboard
 const dashboard = async (req, res) => {
-    // Periksa apakah user sudah login
-    if (!req.session.user) {
-        return res.status(401).json({ message: 'Anda harus login terlebih dahulu' });
-    }
+    const userId = req.user.id; // Ambil user ID dari token
 
     try {
-        const userId = req.session.user.id;
-
         const userDoc = await admin.firestore().collection('User').doc(userId).get();
 
         if (!userDoc.exists) {
@@ -128,6 +155,9 @@ const dashboard = async (req, res) => {
                 name: userData.name,
                 email: userData.email,
                 profilePicture: userData.profilePicture,
+                no_hp: userData.age,
+                age: userData.age,
+                gender: userData.gender,
             },
         });
     } catch (error) {
@@ -135,92 +165,87 @@ const dashboard = async (req, res) => {
     }
 };
 
-
 //Change Password
 const ChangePassword = async (req, res) => {
-    if (!req.session.user) {
-        return res.status(401).json({ message: 'Anda harus login terlebih dahulu' });
-    }
-
-    const userId = req.session.user.id;
-
-    const { passwordBaru } = req.body;
-
-    if (!passwordBaru) {
-        return res.status(400).json({ message: 'Password baru harus diisi' });
-    }
-
     try {
-        const hashedPassword = await bcrypt.hash(passwordBaru, 10);
+        const { id: userId } = req.user; // Ambil userId dari middleware otentikasi
+        const { passwordLama, passwordBaru } = req.body;
 
-        await admin.auth().updateUser(userId, {
-            password: passwordBaru,
-        });
+        if (!passwordLama || !passwordBaru) {
+            return res.status(400).json({ message: 'Password lama dan password baru harus diisi' });
+        }
 
-        await admin.firestore().collection('User').doc(userId).update({
-            password: hashedPassword,
-        });
-
-        res.status(200).json({ message: 'Password berhasil diganti' });
-    } catch (error) {
-        res.status(500).json({ message: `Error: ${error.message}` });
-    }
-};
-
-
-
-// Ganti Data (Nama atau Email)
-const changeData = async (req, res) => {
-    if (!req.session.user) {
-        return res.status(401).json({ message: 'Anda harus login terlebih dahulu' });
-    }
-
-    const userId = req.session.user.id;
-
-    const { name, email } = req.body;
-
-    try {
         // Ambil data user dari Firestore
         const userDoc = await admin.firestore().collection('User').doc(userId).get();
-
         if (!userDoc.exists) {
             return res.status(404).json({ message: 'Data user tidak ditemukan' });
         }
 
         const userData = userDoc.data();
 
+        // Verifikasi password lama
+        const isPasswordMatch = await bcrypt.compare(passwordLama, userData.password);
+        if (!isPasswordMatch) {
+            return res.status(401).json({ message: 'Password lama salah' });
+        }
+
+        // Hash password baru
+        const hashedPassword = await bcrypt.hash(passwordBaru, 10);
+
+        // Update password di Firebase Authentication
+        await admin.auth().updateUser(userId, {
+            password: passwordBaru,
+        });
+
+        // Update password di Firestore
+        await admin.firestore().collection('User').doc(userId).update({
+            password: hashedPassword,
+        });
+
+        res.status(200).json({ message: 'Password berhasil diperbarui' });
+    } catch (error) {
+        res.status(500).json({ message: `Error: ${error.message}` });
+    }
+};
+
+// Ganti Data
+const changeData = async (req, res) => {
+    try {
+        const { id: userId } = req.user; // Ambil userId dari `req.user` yang diset oleh middleware otentikasi
+        const { name, email, no_hp, age, gender } = req.body;
+
+        if (gender !== undefined && ![0, 1].includes(Number(gender))) {
+            return res.status(400).json({ message: 'Jenis kelamin harus bernilai 0 atau 1' });
+        }
+
         const updatedData = {};
-        if (name && name !== userData.name) {
-            updatedData.name = name;
-        }
-        if (email && email !== userData.email) {
-            updatedData.email = email;
-        }
+        if (name) updatedData.name = name;
+        if (email) updatedData.email = email;
+        if (no_hp) updatedData.no_hp = no_hp;
+        if (age) updatedData.age = age;
+        if (gender !== undefined) updatedData.gender = gender;
 
         if (Object.keys(updatedData).length === 0) {
             return res.status(400).json({ message: 'Tidak ada perubahan data' });
         }
 
+        // Update data di Firestore
         await admin.firestore().collection('User').doc(userId).update(updatedData);
 
-        if (email && email !== userData.email) {
+        if (email) {
+            // Update email di Firebase Authentication
             await admin.auth().updateUser(userId, { email });
         }
 
-        // Update sesi dengan data baru
-        req.session.user = {
-            ...req.session.user,
-            ...updatedData,
-        };
-
         res.status(200).json({
             message: 'Data berhasil diperbarui',
-            updatedData: req.session.user,
+            updatedData,
         });
     } catch (error) {
         res.status(500).json({ message: `Error: ${error.message}` });
     }
 };
+
 
 const bucket = admin.storage().bucket();
 
@@ -238,11 +263,7 @@ const upload = multer({
 
 // Function ganti foto profil
 const changeProfilePicture = async (req, res) => {
-    if (!req.session.user) {
-        return res.status(401).json({ message: 'Anda harus login terlebih dahulu' });
-    }
-
-    const userId = req.session.user.id;
+    const userId = req.user.id;
 
     if (!req.file) {
         return res.status(400).json({ message: 'Gambar tidak ditemukan, harap unggah file gambar' });
@@ -251,25 +272,19 @@ const changeProfilePicture = async (req, res) => {
     try {
         const file = req.file;
         const extension = path.extname(file.originalname);
-        const newFileName = `userProfile/${uuidv4()}${extension}`; 
+        const newFileName = `userProfile/${uuidv4()}${extension}`;
         const fileUpload = bucket.file(newFileName);
 
-        // Upload file ke Cloud Storage
         await fileUpload.save(file.buffer, {
             contentType: file.mimetype,
-            public: true, // akses publik
+            public: true,
         });
 
-        // URL publik gambar
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${newFileName}`;
 
-        // Perbarui URL gambar di Firestore
         await admin.firestore().collection('User').doc(userId).update({
             profilePicture: publicUrl,
         });
-
-        // Perbarui sesi user
-        req.session.user.profilePicture = publicUrl;
 
         res.status(200).json({
             message: 'Foto profil berhasil diubah',
