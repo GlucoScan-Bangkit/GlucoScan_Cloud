@@ -34,7 +34,7 @@ const register = async (req, res) => {
         const userId = userRecord.uid;
 
         // Save user details in Firestore
-        await admin.firestore().collection('User').doc(userId).set({
+        await admin.firestore().collection('users').doc(userId).set({
             id: userId,
             name,
             email,
@@ -65,7 +65,7 @@ const login = async (req, res) => {
 
     try {
         const user = await admin.auth().getUserByEmail(email);
-        const userDoc = await admin.firestore().collection('User').doc(user.uid).get();
+        const userDoc = await admin.firestore().collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
             return res.status(404).json({ message: 'Email atau password salah' });
@@ -84,7 +84,7 @@ const login = async (req, res) => {
         });
 
         // Update token di Firestore
-        await admin.firestore().collection('User').doc(user.uid).update({ token });
+        await admin.firestore().collection('users').doc(user.uid).update({ token });
 
         res.status(200).json({
             message: 'Login berhasil',
@@ -110,7 +110,7 @@ const logout = async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         const userId = decoded.id;
 
-        const userDocRef = admin.firestore().collection('User').doc(userId);
+        const userDocRef = admin.firestore().collection('users').doc(userId);
         const userDoc = await userDocRef.get();
 
         if (!userDoc.exists) {
@@ -142,7 +142,7 @@ const dashboard = async (req, res) => {
     const userId = req.user.id; // Ambil user ID dari token
 
     try {
-        const userDoc = await admin.firestore().collection('User').doc(userId).get();
+        const userDoc = await admin.firestore().collection('users').doc(userId).get();
 
         if (!userDoc.exists) {
             return res.status(404).json({ message: 'Data user tidak ditemukan' });
@@ -176,7 +176,7 @@ const ChangePassword = async (req, res) => {
         }
 
         // Ambil data user dari Firestore
-        const userDoc = await admin.firestore().collection('User').doc(userId).get();
+        const userDoc = await admin.firestore().collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return res.status(404).json({ message: 'Data user tidak ditemukan' });
         }
@@ -198,7 +198,7 @@ const ChangePassword = async (req, res) => {
         });
 
         // Update password di Firestore
-        await admin.firestore().collection('User').doc(userId).update({
+        await admin.firestore().collection('users').doc(userId).update({
             password: hashedPassword,
         });
 
@@ -230,7 +230,7 @@ const changeData = async (req, res) => {
         }
 
         // Update data di Firestore
-        await admin.firestore().collection('User').doc(userId).update(updatedData);
+        await admin.firestore().collection('users').doc(userId).update(updatedData);
 
         if (email) {
             // Update email di Firebase Authentication
@@ -282,7 +282,7 @@ const changeProfilePicture = async (req, res) => {
 
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${newFileName}`;
 
-        await admin.firestore().collection('User').doc(userId).update({
+        await admin.firestore().collection('users').doc(userId).update({
             profilePicture: publicUrl,
         });
 
