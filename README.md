@@ -112,7 +112,6 @@ docker run -p 3000:3000 gluco-scan-app
 
 ### VM Specifications
 - **Name**: web-server
-- **Instance Id**: 7849441572834279301
 - **Machine Type**: e2-standard-2
 - **CPU Platform**: Intel Broadwell
 - **Location**: asia-southeast2-b
