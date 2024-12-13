@@ -1,4 +1,5 @@
 # GlucoScan Deployment Guide
+![GlucoScan Deployment](https://github.com/GlucoScan-Bangkit/GlucoScan_Cloud/blob/main/Screenshot%202024-12-13%20175931.png)
 
 ## Introduction
 This document provides detailed instructions for deploying the GlucoScan project, which includes both the Flask API and the Node.js backend service. The project is designed to leverage machine learning for nutrition analysis and integrates with a mobile app.
