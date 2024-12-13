@@ -1,1 +1,5 @@
-app
+serviceAccount.json
+venv/
+*.log
+.idea/
+
