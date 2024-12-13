@@ -1,0 +1,7 @@
+.env
+serviceAccountKey.json
+package-lock.json
+node_modules
+gluco.json
+Dockerfile
+.dockerignore

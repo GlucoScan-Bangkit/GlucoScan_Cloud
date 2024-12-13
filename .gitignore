@@ -1,5 +1,4 @@
-serviceAccount.json
-venv/
-*.log
-.idea/
-
+node_modules
+.env
+package-lock.json
+serviceAccountKey.json
