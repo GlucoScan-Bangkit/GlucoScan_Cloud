@@ -31,8 +31,5 @@ EXPOSE 8080
 # Perintah untuk menjalankan aplikasi dengan virtual environment
 CMD ["/app/venv/bin/python", "app.py"]
 
-# Expose port untuk Flask
-EXPOSE 5000
-
 # Perintah untuk menjalankan aplikasi
 CMD ["bash", "-c", ". venv/bin/activate && flask run"]
