@@ -1,0 +1,43 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: mlops-project-444305
+        
+      - name: Configure Docker to use Google Cloud
+        run: |
+          gcloud auth configure-docker asia-southeast2-docker.pkg.dev
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-repo/glucoscan-cloud:latest ./flask-app
+          docker push asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-repo/glucoscan-cloud:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy glucoscan-cloud \
+            --image=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-repo/glucoscan-cloud:latest \
+            --region=${{ secrets.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080
